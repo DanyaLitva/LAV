@@ -1,4 +1,5 @@
-﻿#include "LAV.h"
+﻿//#include "LAV.h"
+#include "LAV_without_segmentation.h"
 using namespace std;
 
 
