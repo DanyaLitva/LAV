@@ -283,7 +283,7 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
     int count_el = csr_matrix.row_ptr.back() - csr_matrix.row_ptr.front();
 
     vector<pair<int, int>> lav_col(cols);
-    vector<pair<int, int>> lav_dense_row(rows);
+    //vector<pair<int, int>> lav_dense_row(rows);
 
     for (size_t it = 0; it < csr_matrix.col_ind.size(); ++it) lav_col[csr_matrix.col_ind[it]].second++;
     for (size_t it = 0; it < cols; ++it) lav_col[it].first = it;

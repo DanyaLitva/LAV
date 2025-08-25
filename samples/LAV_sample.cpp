@@ -69,7 +69,7 @@ int main()
     cout << "Mult: \n";
 
     cols = rows = 10001;
-    dense_matrix = create_random_matrix(cols, rows,1000000);
+    dense_matrix = create_random_matrix(cols, rows,5000000);
 
 
     vector<double> x(cols);

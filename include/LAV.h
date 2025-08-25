@@ -14,7 +14,7 @@ const int SIMD_Lanes = 4;
 const double MinVal = 0.1;
 const double MaxVal = 10.0;
 double error_rate = 1e-10;
-
+const size_t segment_len = 10;
 
 
 struct CSRMatrix {
@@ -155,6 +155,61 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
     lav_matrix = LAVMatrix();
 
     int count_el = csr_matrix.row_ptr.back() - csr_matrix.row_ptr.front();
+
+    vector<pair<int, int>> lav_col(cols);
+
+    for (size_t it = 0; it < csr_matrix.col_ind.size(); ++it) lav_col[csr_matrix.col_ind[it]].second++;
+    for (size_t it = 0; it < cols; ++it) lav_col[it].first = it;
+
+    std::sort(lav_col.begin(), lav_col.end(), [](const std::pair<int, int>& left, const std::pair<int, int>& right) {
+        return left.second > right.second;
+        });
+
+    int separation = 0;
+    int temp = 0;
+    while ((double(temp) / count_el) < T) {
+        temp += lav_col[separation].second;
+        separation++;
+    }
+
+    //
+    //SPARSE PART OF LAV MATRIX
+    CSRMatrix sparse_part;
+    sparse_part.row_ptr.push_back(0);
+    
+    vector<int> old_to_sparse(cols, -1);
+    int sparse_col_count = cols - separation;
+    for (int i = separation; i < cols; i++) {
+        old_to_sparse[lav_col[i].first] = i - separation;
+    }
+
+    for (int i = 0; i < rows; i++) {
+        int start = csr_matrix.row_ptr[i];
+        int end = csr_matrix.row_ptr[i + 1];
+        int count_in_row = 0;
+
+        for (int j = start; j < end; j++) {
+            int old_col = csr_matrix.col_ind[j];
+            if (old_to_sparse[old_col] != -1) {
+                sparse_part.vals.push_back(csr_matrix.vals[j]);
+                sparse_part.col_ind.push_back(old_col);
+                count_in_row++;
+            }
+        }
+        sparse_part.row_ptr.push_back(sparse_part.row_ptr.back() + count_in_row);
+    }
+
+    lav_matrix.sparse_part = sparse_part;
+
+    //
+    //DENSE PART OF LAV MATRIX
+    
+    size_t segment_count = separation / segment_len;
+    if ((separation % segment_len) != 0) segment_count++;
+
+    for (size_t segment_num = 0; segment_num < segment_count; segment_num++) {
+
+    }
 }
 
 void MV_dense(vector<vector<double>> dense_matrix, vector<double> x, vector<double>& res, int rows, int cols) {
