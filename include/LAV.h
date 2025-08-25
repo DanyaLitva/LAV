@@ -38,7 +38,7 @@ template <typename type>
 struct LAVSegment {
     vector<vector<int>> out_order;
     vector<int> chunk_offsets = vector<int>(1, 0);
-    vector<vector< bitset<SIMD_Lanes> >> mask;
+    vector<bitset<SIMD_Lanes >> mask;
     vector<vector<vector<type>>> vals;
     vector<vector<vector<int>>> col_id;
 };
@@ -476,7 +476,7 @@ void CSR_to_LAV(CSRMatrix<type>& csr_matrix, LAVMatrix<type>& lav_matrix, int ro
         }
 
         lav_matrix.segments[segment_num].out_order = out_order;
-        lav_matrix.segments[segment_num].mask.resize(lav_matrix.segments[segment_num].chunk_offsets.size() - 1);
+
         bitset<SIMD_Lanes> actual_mask;
         for (size_t i = 0; i < lav_matrix.segments[segment_num].chunk_offsets.size() - 1; ++i) {
             for (size_t j = 0; j < lav_matrix.segments[segment_num].chunk_offsets[i + 1] - lav_matrix.segments[segment_num].chunk_offsets[i]; ++j) {
@@ -484,7 +484,7 @@ void CSR_to_LAV(CSRMatrix<type>& csr_matrix, LAVMatrix<type>& lav_matrix, int ro
                 for (size_t k = 0; k < lav_matrix.segments[segment_num].col_id[i].size(); ++k) {
                     if (lav_matrix.segments[segment_num].col_id[i][k][j] != -1) actual_mask |= (1 << k);
                 }
-                lav_matrix.segments[segment_num].mask[i].push_back(actual_mask);
+                lav_matrix.segments[segment_num].mask.push_back(actual_mask);
             }
         }
 
@@ -533,35 +533,66 @@ template <typename type>
 void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
     result.clear();
     result.resize(rows, 0.0);
-
+    bitset<SIMD_Lanes> mask;
+    vector<int> row_ids(SIMD_Lanes);
+    vector<type> prev(SIMD_Lanes);
+    vector<int> now_col_ids(SIMD_Lanes);
+    vector<type> now_vals(SIMD_Lanes);
+    vector<type> xval(SIMD_Lanes);
+    vector<type> mul(SIMD_Lanes);
+    vector<type> row_sums(SIMD_Lanes);
     for (const LAVSegment<type>& seg : lav_matrix.segments) {
         int num_chunks = seg.vals.size();
 
         for (int c = 0; c < num_chunks; ++c) {
             int num_lanes = seg.vals[c].size();
             int num_cols = seg.chunk_offsets[c + 1] - seg.chunk_offsets[c];
+            row_sums = vector<type>(SIMD_Lanes, type(0.0));
 
-            for (int j = 0; j < num_cols; ++j) {
-                int col = -1;
-                if (!seg.col_id[c].empty() && !seg.col_id[c][0].empty()) {
-                    col = seg.col_id[c][0][j];
-                }
-                if (col < 0) continue;
+            for (size_t num_out_order = 0; num_out_order < num_lanes; num_out_order++) {
+                row_ids[num_out_order] = seg.out_order[c][num_out_order];
+                //prev[num_out_order] = result[seg.out_order[c][num_out_order]];
+            }
 
-                type xval = vec[col];
-                bitset<SIMD_Lanes> active = seg.mask[c][j];
 
-                for (int lane = 0; lane < num_lanes; ++lane) {
-                    if (active.test(lane)) {
-                        int row = seg.out_order[c][lane];
-                        result[row] += seg.vals[c][lane][j] * xval;
+            for (int i = seg.chunk_offsets[c]; i < seg.chunk_offsets[c + 1]; ++i) {
+                int num_in_array = i - seg.chunk_offsets[c];
+                mask = seg.mask[i];
+
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        now_col_ids[num] = seg.col_id[c][num][num_in_array];
+                        now_vals[num] = seg.vals[c][num][num_in_array];
+                        xval[num] = vec[now_col_ids[num]]; //?
                     }
                 }
+
+                //mul
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        mul[num] = now_vals[num] * xval[num];
+                    }
+                }
+
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        row_sums[num] += mul[num];
+                    }
+                }
+
             }
+
+
+            for (size_t num = 0; num < num_lanes; ++num) {
+                result[row_ids[num]] += row_sums[num];
+            }
+        
+
+
+
         }
     }
     vector<type> temp_res(rows, 0.0);
     SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
     for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
 }
-
