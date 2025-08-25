@@ -14,10 +14,13 @@ const int SIMD_Lanes = 4;
 const double MinVal = 0.1;
 const double MaxVal = 10.0;
 double error_rate = 1e-10;
-const size_t segment_len = 10;
+const size_t segment_len = 50;
 
 
 struct CSRMatrix {
+    int m = 0;
+    int n = 0;
+    int nz = 0;
     vector<double> vals;
     vector<int> col_ind;
     vector<int> row_ptr;
@@ -32,6 +35,9 @@ struct LAVSegment {
 };
 
 struct LAVMatrix {
+    int m = 0;
+    int n = 0;
+    int nz = 0;
     vector<LAVSegment> segments;
 
     CSRMatrix sparse_part;
@@ -87,16 +93,20 @@ CSRMatrix dense_to_csr(const vector<vector<double>>& dense) {
     int rows = dense.size();
     int cols = dense[0].size();
     csr.row_ptr.push_back(0);
-
+    csr.m = rows;
+    csr.n = cols;
+    int count_nz = 0;
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             if (dense[i][j] != 0.0) {
                 csr.vals.push_back(dense[i][j]);
                 csr.col_ind.push_back(j);
+                count_nz++;
             }
         }
         csr.row_ptr.push_back(csr.vals.size());
     }
+    csr.nz = count_nz;
     return csr;
 }
 
@@ -148,12 +158,146 @@ void print_csr_matrix(const CSRMatrix& csr) {
 }
 
 void print_lav_matrix(const LAVMatrix& lav) {
+    //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
+    cout << "dense part of matrix: " << endl;
+    int num = 0;
+    for (LAVSegment seg : lav.segments) {
+        cout << "Segment num " << num++ << endl<<endl;
 
+        cout << "chunk offsets: { ";
+        for (int i : seg.chunk_offsets) cout << i << " ";
+        cout << " }" << endl;
+
+        cout << "mask: \n{ ";
+        for (vector<bitset<SIMD_Lanes>> i : seg.mask) {
+            cout << "\n\t{ ";
+            for (bitset<SIMD_Lanes> j : i) {
+                cout << j << " ";
+            }
+            cout << "} ";
+        }
+        cout << "\n }\n";
+
+
+        cout << "vals: \n{ ";
+        for (vector<vector<double>> i : seg.vals) {
+            cout << "\n\t{ ";
+            for (vector<double> j : i) {
+                cout << "\n\t\t{ ";
+                for (double k : j) {
+                    cout << k << " ";
+                }
+                cout << "} ";
+            }
+            cout << "\n\t} ";
+        }
+        cout << "\n}\n";
+
+        cout << "col_id: \n{ ";
+        for (vector<vector<int>> i : seg.col_id) {
+            cout << "\n\t{ ";
+            for (vector<int> j : i) {
+                cout << "\n\t\t{ ";
+                for (int k : j) {
+                    cout << k << " ";
+                }
+                cout << "} ";
+            }
+            cout << "\n\t} ";
+        }
+        cout << "\n}\n";
+
+        cout << "out order: \n{ ";
+        for (vector<int> i : seg.out_order) {
+            cout << "\n\t{ ";
+            for (int j : i) {
+                cout << j << " ";
+            }
+            cout << "} ";
+        }
+        cout << "\n }\n";
+
+    }
+        cout << endl << "sparse part of matrix: " << endl;
+        cout << "In CSR format:\n";
+        print_csr_matrix(lav.sparse_part);
+}
+
+void print_lav_matrix_w_letters_and_shift(const LAVMatrix& lav) {
+
+    //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
+    cout << "dense part of matrix: " << endl;
+    int num = 0;
+    for (LAVSegment seg : lav.segments) {
+        cout << "\nSegment num " << num++ << endl << endl;
+
+        cout << "chunk offsets: { ";
+        for (int i : seg.chunk_offsets) cout << i << " ";
+        cout << " }" << endl;
+
+        cout << "mask: \n{ ";
+        for (vector<bitset<SIMD_Lanes>> i : seg.mask) {
+            cout << "\n\t{ ";
+            for (bitset<SIMD_Lanes> j : i) {
+                cout << j << " ";
+            }
+            cout << "} ";
+        }
+        cout << "\n }\n";
+
+
+        cout << "vals: \n{ ";
+        for (vector<vector<double>> i : seg.vals) {
+            cout << "\n\t{ ";
+            for (vector<double> j : i) {
+                cout << "\n\t\t{ ";
+                for (double k : j) {
+                    char letter = char(int(k) + 'a' - 1);
+                    if (letter >= 'i') letter++;
+                    if (letter >= 'q') letter++;
+                    cout << letter << " ";
+                }
+                cout << "} ";
+            }
+            cout << "\n\t} ";
+        }
+        cout << "\n}\n";
+
+        cout << "col_id: \n{ ";
+        for (vector<vector<int>> i : seg.col_id) {
+            cout << "\n\t{ ";
+            for (vector<int> j : i) {
+                cout << "\n\t\t{ ";
+                for (int k : j) {
+                    cout << k + 1 << " ";
+                }
+                cout << "} ";
+            }
+            cout << "\n\t} ";
+        }
+        cout << "\n}\n";
+
+        cout << "out order: \n{ ";
+        for (vector<int> i : seg.out_order) {
+            cout << "\n\t{ ";
+            for (int j : i) {
+                cout << j + 1 << " ";
+            }
+            cout << "} ";
+        }
+        cout << "\n }\n";
+    }
+    /*cout << endl << "sparse part of matrix: " << endl << "start from " << lav.separation << " column(after sort)" << endl;*/
+    cout << endl << "sparse part of matrix: " << endl;
+    cout << "In CSR format:\n";
+    print_csr_matrix(lav.sparse_part);
 }
 
 void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols) {
     lav_matrix = LAVMatrix();
-
+    lav_matrix.m = csr_matrix.m;
+    lav_matrix.n = csr_matrix.n;
+    lav_matrix.nz = csr_matrix.nz;
     int count_el = csr_matrix.row_ptr.back() - csr_matrix.row_ptr.front();
 
     vector<pair<int, int>> lav_col(cols);
@@ -243,14 +387,6 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
             old_row_to_new[row_nonzeros[i].first] = i;
         }
 
-        std::vector<std::vector<std::vector<double>>> chunks(
-            int(std::ceil(double(rows) / SIMD_Lanes)),
-            std::vector<std::vector<double>>(
-                SIMD_Lanes,
-                std::vector<double>(end_seg - start_seg, 0.0)
-            )
-        );
-
         vector<int> max_len_in_chunk;
         for (size_t i = 0; i < rows; ++i) {
             if (i % SIMD_Lanes == 0) max_len_in_chunk.push_back(row_nonzeros[i].second);
@@ -293,7 +429,6 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
                 if ((start_seg <= new_col) && (new_col < end_seg)) {
                     int chunk_index = new_row / SIMD_Lanes;
                     int row_in_chunk = new_row % SIMD_Lanes;
-                    chunks[chunk_index][row_in_chunk][new_col] = csr_matrix.vals[j];
                     actual_lane_vals.push_back(make_pair(csr_matrix.vals[j], new_col));
                     actual_lane_cols.push_back(make_pair(old_col, new_col));
                 }
@@ -372,79 +507,36 @@ bool vector_comprasion(vector<double> left, vector<double> right) {
     return true;
 }
 
-
-
 void SpMV_LAV(const LAVMatrix& lav_matrix, const vector<double>& vec, vector<double>& result, int rows, int cols) {
     result.clear();
     result.resize(rows, 0.0);
 
-    for (size_t s = 0; s < lav_matrix.segments.size(); ++s) {
-        const LAVSegment& seg = lav_matrix.segments[s];
-        const size_t seg_nChunks = seg.vals.size();
-        if (seg_nChunks == 0) continue;
+    for (const LAVSegment& seg : lav_matrix.segments) {
+        int num_chunks = seg.vals.size();
 
-        for (size_t c = 0; c < seg_nChunks; ++c) {
-            int pos_begin = seg.chunk_offsets[c];
-            int pos_end = seg.chunk_offsets[c + 1];
-            int num_pos = pos_end - pos_begin;
-            if (num_pos <= 0) continue;
+        for (int c = 0; c < num_chunks; ++c) {
+            int num_lanes = seg.vals[c].size();
+            int num_cols = seg.chunk_offsets[c + 1] - seg.chunk_offsets[c];
 
-            int num_lanes = static_cast<int>(seg.vals[c].size());
-            if (num_lanes <= 0) continue;
-
-            uint32_t rowmask_bits;
-            if (SIMD_Lanes >= 32) rowmask_bits = 0xFFFFFFFFu;
-            else rowmask_bits = ((1u << SIMD_Lanes) - 1u);
-
-            if (c == seg_nChunks - 1) {
-                int rows_in_last = rows - static_cast<int>(c) * SIMD_Lanes;
-                if (rows_in_last < 0) rows_in_last = 0;
-                if (rows_in_last < SIMD_Lanes) {
-                    int shift = SIMD_Lanes - rows_in_last;
-                    if (shift >= 0 && shift < SIMD_Lanes) rowmask_bits = rowmask_bits >> shift;
-                    else if (rows_in_last == 0) rowmask_bits = 0;
+            for (int j = 0; j < num_cols; ++j) {
+                int col = -1;
+                if (!seg.col_id[c].empty() && !seg.col_id[c][0].empty()) {
+                    col = seg.col_id[c][0][j];
                 }
-            }
+                if (col < 0) continue;
 
-            std::bitset<SIMD_Lanes> rowmask_bitset;
-            for (int b = 0; b < SIMD_Lanes; ++b) {
-                if (rowmask_bits & (1u << b)) rowmask_bitset.set(b);
-                else rowmask_bitset.reset(b);
-            }
-
-            for (int p = 0; p < num_pos; ++p) {
-                std::bitset<SIMD_Lanes> active = seg.mask[c][p] & rowmask_bitset;
-                if (active.none()) continue;
-
-                int common_col = seg.col_id[c][0][p];
-                bool can_use_common = (common_col >= 0);
-                if (can_use_common) {
-                    for (int lane = 0; lane < num_lanes; ++lane) {
-                        if (!active.test(lane)) continue;
-                        if (seg.col_id[c][lane][p] != common_col) { can_use_common = false; break; }
-                    }
-                }
-
-                double xval_common = 0.0;
-                if (can_use_common) {
-                    if (static_cast<size_t>(common_col) < vec.size()) xval_common = vec[common_col];
-                    else can_use_common = false;
-                }
+                double xval = vec[col];
+                bitset<SIMD_Lanes> active = seg.mask[c][j];
 
                 for (int lane = 0; lane < num_lanes; ++lane) {
-                    if (!active.test(lane)) continue;
-                    int col = seg.col_id[c][lane][p];
-                    if (col < 0) continue;
-                    if (static_cast<size_t>(col) >= vec.size()) continue;
-                    double xval = can_use_common ? xval_common : vec[col];
-                    int row = seg.out_order[c][lane];
-                    if (row < 0 || static_cast<size_t>(row) >= result.size()) continue;
-                    result[row] += seg.vals[c][lane][p] * xval;
+                    if (active.test(lane)) {
+                        int row = seg.out_order[c][lane];
+                        result[row] += seg.vals[c][lane][j] * xval;
+                    }
                 }
             }
         }
     }
-
     vector<double> temp_res(rows, 0.0);
     SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
     for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
