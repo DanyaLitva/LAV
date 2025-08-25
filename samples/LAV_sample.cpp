@@ -1,5 +1,5 @@
-﻿//#include "LAV.h"
-#include "LAV_without_segmentation.h"
+﻿#include "LAV.h"
+//#include "LAV_without_segmentation.h"
 using namespace std;
 
 
@@ -121,7 +121,7 @@ int main()
 
     cout << "LAV: \n\t";
     start = std::chrono::steady_clock::now();
-    SpMV_LAV(lav_matrix, x, y, rows, cols);
+    //SpMV_LAV(lav_matrix, x, y, rows, cols);
     end = std::chrono::steady_clock::now();
     elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     cout << "it time: " << elapsed << " miliseconds" << endl;
