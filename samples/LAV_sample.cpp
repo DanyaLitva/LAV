@@ -29,14 +29,14 @@ int main()
         {0,18,0,0,0,19,0,0}
     };
 
-    cout << "Original Matrix:" << endl;
-    print_matrix(dense_matrix);
+    //cout << "Original Matrix:" << endl;
+    //print_matrix(dense_matrix);
 
     CSRMatrix<double> csr_matrix = dense_to_csr(dense_matrix);
 
-    cout << "\nCSR Matrix:" << endl;
+    //cout << "\nCSR Matrix:" << endl;
 
-    print_csr_matrix(csr_matrix);
+    //print_csr_matrix(csr_matrix);
     /*
     auto reconstructed_matrix = csr_to_dense(csr_matrix, rows, cols);
 
@@ -131,7 +131,10 @@ int main()
     cout << "\tIs correct?: ";
     if (vector_comprasion(y, temp_y)) cout << "yes";
     else cout << "no";
-    cout << endl;
+    cout << endl << endl;
+
+
+
 }
 
 

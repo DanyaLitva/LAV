@@ -6,6 +6,14 @@
 #include <iomanip>
 #include <bitset>
 #include <chrono>
+#include <immintrin.h>
+#include <omp.h>
+#include <limits>
+#include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <string>
+
 using namespace std;
 
 
@@ -170,7 +178,7 @@ void print_lav_matrix(const LAVMatrix<type>& lav) {
     //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
     cout << "dense part of matrix: " << endl;
     int num = 0;
-    for (LAVSegment seg : lav.segments) {
+    for (LAVSegment<type>& seg : lav.segments) {
         cout << "Segment num " << num++ << endl<<endl;
 
         cout << "chunk offsets: { ";
@@ -228,7 +236,7 @@ void print_lav_matrix(const LAVMatrix<type>& lav) {
 
     }
         cout << endl << "sparse part of matrix: " << endl;
-        cout << "In CSR format:\n";
+        cout << "In CSR format:"<<endl;
         print_csr_matrix(lav.sparse_part);
 }
 
@@ -238,7 +246,7 @@ void print_lav_matrix_w_letters_and_shift(const LAVMatrix<type>& lav) {
     //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
     cout << "dense part of matrix: " << endl;
     int num = 0;
-    for (LAVSegment seg : lav.segments) {
+    for (LAVSegment<type>& seg : lav.segments) {
         cout << "\nSegment num " << num++ << endl << endl;
 
         cout << "chunk offsets: { ";
@@ -299,7 +307,7 @@ void print_lav_matrix_w_letters_and_shift(const LAVMatrix<type>& lav) {
     }
     /*cout << endl << "sparse part of matrix: " << endl << "start from " << lav.separation << " column(after sort)" << endl;*/
     cout << endl << "sparse part of matrix: " << endl;
-    cout << "In CSR format:\n";
+    cout << "In CSR format:"<<endl;
     print_csr_matrix(lav.sparse_part);
 }
 
