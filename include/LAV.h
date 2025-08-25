@@ -532,7 +532,7 @@ bool vector_comprasion(vector<type> left, vector<type> right) {
 template <typename type>
 void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
     result.clear();
-    result.resize(rows, 0.0);
+    result.resize(rows, type(0.0));
     bitset<SIMD_Lanes> mask;
     vector<int> row_ids(SIMD_Lanes);
     vector<type> prev(SIMD_Lanes);
@@ -546,7 +546,7 @@ void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector
 
         for (int c = 0; c < num_chunks; ++c) {
             int num_lanes = seg.vals[c].size();
-            int num_cols = seg.chunk_offsets[c + 1] - seg.chunk_offsets[c];
+            //int num_cols = seg.chunk_offsets[c + 1] - seg.chunk_offsets[c];
             row_sums = vector<type>(SIMD_Lanes, type(0.0));
 
             for (size_t num_out_order = 0; num_out_order < num_lanes; num_out_order++) {
@@ -563,7 +563,7 @@ void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector
                     if (mask.test(num)) {
                         now_col_ids[num] = seg.col_id[c][num][num_in_array];
                         now_vals[num] = seg.vals[c][num][num_in_array];
-                        xval[num] = vec[now_col_ids[num]]; //?
+                        xval[num] = vec[now_col_ids[num]]; 
                     }
                 }
 
@@ -592,7 +592,7 @@ void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector
 
         }
     }
-    vector<type> temp_res(rows, 0.0);
+    vector<type> temp_res(rows, type(0.0));
     SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
     for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
 }
