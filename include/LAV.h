@@ -14,37 +14,40 @@ const int SIMD_Lanes = 4;
 const double MinVal = 0.1;
 const double MaxVal = 10.0;
 double error_rate = 1e-10;
-const size_t segment_len = 50;
+const size_t segment_len = 5000;
 
-
+template <typename type>
 struct CSRMatrix {
     int m = 0;
     int n = 0;
     int nz = 0;
-    vector<double> vals;
+    vector<type> vals;
     vector<int> col_ind;
     vector<int> row_ptr;
 };
 
+template <typename type>
 struct LAVSegment {
     vector<vector<int>> out_order;
     vector<int> chunk_offsets = vector<int>(1, 0);
     vector<vector< bitset<SIMD_Lanes> >> mask;
-    vector<vector<vector<double>>> vals;
+    vector<vector<vector<type>>> vals;
     vector<vector<vector<int>>> col_id;
 };
 
+template <typename type>
 struct LAVMatrix {
     int m = 0;
     int n = 0;
     int nz = 0;
-    vector<LAVSegment> segments;
+    vector<LAVSegment<type>> segments;
 
-    CSRMatrix sparse_part;
+    CSRMatrix<type> sparse_part;
 };
 
-vector<vector<double>> create_random_matrix(int rows, int cols, int non_zero) {
-    vector<vector<double>> matrix(rows, vector<double>(cols, 0.0));
+template <typename type>
+vector<vector<type>> create_random_matrix(int rows, int cols, int non_zero) {
+    vector<vector<type>> matrix(rows, vector<type>(cols, 0.0));
     random_device rd;
     mt19937 gen(rd());
     uniform_int_distribution<> dis_row(0, rows - 1);
@@ -56,14 +59,15 @@ vector<vector<double>> create_random_matrix(int rows, int cols, int non_zero) {
         int i = dis_row(gen);
         int j = dis_col(gen);
         if (matrix[i][j] == 0.0) {
-            matrix[i][j] = dis_val(gen);
+            matrix[i][j] = type(dis_val(gen));
             count++;
         }
     }
     return matrix;
 }
 
-void print_matrix(const vector<vector<double>>& matrix) {
+template <typename type>
+void print_matrix(const vector<vector<type>>& matrix) {
     int rows = matrix.size();
     int cols = matrix[0].size();
 
@@ -88,8 +92,9 @@ void print_matrix(const vector<vector<double>>& matrix) {
     }
 }
 
-CSRMatrix dense_to_csr(const vector<vector<double>>& dense) {
-    CSRMatrix csr;
+template <typename type>
+CSRMatrix<type> dense_to_csr(const vector<vector<type>>& dense) {
+    CSRMatrix<type> csr;
     int rows = dense.size();
     int cols = dense[0].size();
     csr.row_ptr.push_back(0);
@@ -110,8 +115,9 @@ CSRMatrix dense_to_csr(const vector<vector<double>>& dense) {
     return csr;
 }
 
-vector<vector<double>> csr_to_dense(const CSRMatrix& csr, int rows, int cols) {
-    vector<vector<double>> dense(rows, vector<double>(cols, 0.0));
+template <typename type>
+vector<vector<type>> csr_to_dense(const CSRMatrix<type>& csr, int rows, int cols) {
+    vector<vector<type>> dense(rows, vector<type>(cols, 0.0));
 
     for (int i = 0; i < rows; i++) {
         int start = csr.row_ptr[i];
@@ -125,7 +131,8 @@ vector<vector<double>> csr_to_dense(const CSRMatrix& csr, int rows, int cols) {
     return dense;
 }
 
-bool matrix_comprasion(vector<vector<double>> left, vector<vector<double>> right) {
+template <typename type>
+bool matrix_comprasion(vector<vector<type>> left, vector<vector<type>> right) {
     if (left.size() != right.size()) return false;
     if (left.front().size() != right.front().size()) return false;
     for (size_t i = 0; i < left.size(); ++i) {
@@ -137,9 +144,10 @@ bool matrix_comprasion(vector<vector<double>> left, vector<vector<double>> right
     return true;
 }
 
-void print_csr_matrix(const CSRMatrix& csr) {
+template <typename type>
+void print_csr_matrix(const CSRMatrix<type>& csr) {
     cout << "CSR vals: ";
-    for (double val : csr.vals) {
+    for (type val : csr.vals) {
         cout << fixed << setprecision(2) << val << " ";
     }
     cout << endl;
@@ -157,7 +165,8 @@ void print_csr_matrix(const CSRMatrix& csr) {
     cout << endl;
 }
 
-void print_lav_matrix(const LAVMatrix& lav) {
+template <typename type>
+void print_lav_matrix(const LAVMatrix<type>& lav) {
     //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
     cout << "dense part of matrix: " << endl;
     int num = 0;
@@ -180,11 +189,11 @@ void print_lav_matrix(const LAVMatrix& lav) {
 
 
         cout << "vals: \n{ ";
-        for (vector<vector<double>> i : seg.vals) {
+        for (vector<vector<type>> i : seg.vals) {
             cout << "\n\t{ ";
-            for (vector<double> j : i) {
+            for (vector<type> j : i) {
                 cout << "\n\t\t{ ";
-                for (double k : j) {
+                for (type k : j) {
                     cout << k << " ";
                 }
                 cout << "} ";
@@ -223,7 +232,8 @@ void print_lav_matrix(const LAVMatrix& lav) {
         print_csr_matrix(lav.sparse_part);
 }
 
-void print_lav_matrix_w_letters_and_shift(const LAVMatrix& lav) {
+template <typename type>
+void print_lav_matrix_w_letters_and_shift(const LAVMatrix<type>& lav) {
 
     //cout << "dense part of matrix: " << 0 << "-" << lav.separation - 1 << " columns" << endl;
     cout << "dense part of matrix: " << endl;
@@ -247,11 +257,11 @@ void print_lav_matrix_w_letters_and_shift(const LAVMatrix& lav) {
 
 
         cout << "vals: \n{ ";
-        for (vector<vector<double>> i : seg.vals) {
+        for (vector<vector<type>> i : seg.vals) {
             cout << "\n\t{ ";
-            for (vector<double> j : i) {
+            for (vector<type> j : i) {
                 cout << "\n\t\t{ ";
-                for (double k : j) {
+                for (type k : j) {
                     char letter = char(int(k) + 'a' - 1);
                     if (letter >= 'i') letter++;
                     if (letter >= 'q') letter++;
@@ -293,8 +303,9 @@ void print_lav_matrix_w_letters_and_shift(const LAVMatrix& lav) {
     print_csr_matrix(lav.sparse_part);
 }
 
-void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols) {
-    lav_matrix = LAVMatrix();
+template <typename type>
+void CSR_to_LAV(CSRMatrix<type>& csr_matrix, LAVMatrix<type>& lav_matrix, int rows, int cols) {
+    lav_matrix = LAVMatrix<type>();
     lav_matrix.m = csr_matrix.m;
     lav_matrix.n = csr_matrix.n;
     lav_matrix.nz = csr_matrix.nz;
@@ -318,7 +329,7 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
 
     //
     //SPARSE PART OF LAV MATRIX
-    CSRMatrix sparse_part;
+    CSRMatrix<type> sparse_part;
     sparse_part.row_ptr.push_back(0);
     
     vector<int> old_to_sparse(cols, -1);
@@ -399,21 +410,21 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
         int ind = 0;
         for (int i : max_len_in_chunk) {
             lav_matrix.segments[segment_num].chunk_offsets.push_back(lav_matrix.segments[segment_num].chunk_offsets.back() + i);
-            lav_matrix.segments[segment_num].vals.push_back(vector<vector<double>>());
+            lav_matrix.segments[segment_num].vals.push_back(vector<vector<type>>());
             lav_matrix.segments[segment_num].col_id.push_back(vector<vector<int>>());
             for (int j = 0; j < SIMD_Lanes; ++j) {
-                lav_matrix.segments[segment_num].vals[ind].push_back(vector<double>(i));
+                lav_matrix.segments[segment_num].vals[ind].push_back(vector<type>(i));
                 lav_matrix.segments[segment_num].col_id[ind].push_back(vector<int>(i, -1));
             }
             ++ind;
         }
 
         if (rows % SIMD_Lanes != 0) {
-            lav_matrix.segments[segment_num].vals.back() = vector<vector<double>>(rows % SIMD_Lanes, vector<double>(max_len_in_chunk.back(), 0.0));
+            lav_matrix.segments[segment_num].vals.back() = vector<vector<type>>(rows % SIMD_Lanes, vector<type>(max_len_in_chunk.back(), 0.0));
             lav_matrix.segments[segment_num].col_id.back() = vector<vector<int>>(rows % SIMD_Lanes, vector<int>(max_len_in_chunk.back(), -1));
         }
 
-        vector<pair<double, int>> actual_lane_vals;
+        vector<pair<type, int>> actual_lane_vals;
         vector<pair<int, int>> actual_lane_cols;
 
         for (int i = 0; i < rows; i++) {
@@ -436,7 +447,7 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
 
             int temp = 0;
             sort(actual_lane_vals.begin(), actual_lane_vals.end(),
-                [](const pair<double, int>& a, const pair<double, int>& b) {
+                [](const pair<type, int>& a, const pair<type, int>& b) {
                     return a.second < b.second;
                 });
 
@@ -451,7 +462,7 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
         }
 
 
-        vector<vector<int>> out_order(int(std::ceil(double(rows) / SIMD_Lanes)));
+        vector<vector<int>> out_order(int(std::ceil(type(rows) / SIMD_Lanes)));
         for (size_t i = 0; i < rows; ++i) {
             out_order[i / SIMD_Lanes].push_back(row_nonzeros[i].first);
         }
@@ -473,7 +484,8 @@ void CSR_to_LAV(CSRMatrix& csr_matrix, LAVMatrix& lav_matrix, int rows, int cols
     }
 }
 
-void MV_dense(vector<vector<double>> dense_matrix, vector<double> x, vector<double>& res, int rows, int cols) {
+template <typename type>
+void MV_dense(vector<vector<type>> dense_matrix, vector<type> x, vector<type>& res, int rows, int cols) {
     for (size_t i = 0; i < rows; ++i) res[i] = 0.0;
 
     for (size_t i = 0; i < rows; ++i) {
@@ -483,11 +495,12 @@ void MV_dense(vector<vector<double>> dense_matrix, vector<double> x, vector<doub
     }
 }
 
-void SpMV_CSR(const CSRMatrix& mat, const vector<double>& vec, vector<double>& result, int rows, int cols) {
+template <typename type>
+void SpMV_CSR(const CSRMatrix<type>& mat, const vector<type>& vec, vector<type>& result, int rows, int cols) {
     result.clear();
     result.resize(rows);
     for (int i = 0; i < rows; ++i) {
-        double sum = 0.0;
+        type sum = 0.0;
         int start = mat.row_ptr[i];
         int end = mat.row_ptr[i + 1];
 
@@ -498,7 +511,8 @@ void SpMV_CSR(const CSRMatrix& mat, const vector<double>& vec, vector<double>& r
     }
 }
 
-bool vector_comprasion(vector<double> left, vector<double> right) {
+template <typename type>
+bool vector_comprasion(vector<type> left, vector<type> right) {
     if (left.size() != right.size()) return false;
     for (size_t i = 0; i < left.size(); ++i) {
             if (abs(left[i] - right[i]) > error_rate) return false;
@@ -507,11 +521,12 @@ bool vector_comprasion(vector<double> left, vector<double> right) {
     return true;
 }
 
-void SpMV_LAV(const LAVMatrix& lav_matrix, const vector<double>& vec, vector<double>& result, int rows, int cols) {
+template <typename type>
+void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
     result.clear();
     result.resize(rows, 0.0);
 
-    for (const LAVSegment& seg : lav_matrix.segments) {
+    for (const LAVSegment<type>& seg : lav_matrix.segments) {
         int num_chunks = seg.vals.size();
 
         for (int c = 0; c < num_chunks; ++c) {
@@ -525,7 +540,7 @@ void SpMV_LAV(const LAVMatrix& lav_matrix, const vector<double>& vec, vector<dou
                 }
                 if (col < 0) continue;
 
-                double xval = vec[col];
+                type xval = vec[col];
                 bitset<SIMD_Lanes> active = seg.mask[c][j];
 
                 for (int lane = 0; lane < num_lanes; ++lane) {
@@ -537,7 +552,8 @@ void SpMV_LAV(const LAVMatrix& lav_matrix, const vector<double>& vec, vector<dou
             }
         }
     }
-    vector<double> temp_res(rows, 0.0);
+    vector<type> temp_res(rows, 0.0);
     SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
     for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
 }
+

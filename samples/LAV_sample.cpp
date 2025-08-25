@@ -16,7 +16,7 @@ int main()
     int rows = rows_count;
     int cols = cols_count;
     int count_el = count_el_in_matrix;
-    auto dense_matrix = create_random_matrix(rows, cols, count_el);
+    auto dense_matrix = create_random_matrix<double>(rows, cols, count_el);
 
     dense_matrix = {
         { 1,0,0,2,0,3,0,0 },
@@ -32,7 +32,7 @@ int main()
     cout << "Original Matrix:" << endl;
     print_matrix(dense_matrix);
 
-    CSRMatrix csr_matrix = dense_to_csr(dense_matrix);
+    CSRMatrix<double> csr_matrix = dense_to_csr(dense_matrix);
 
     cout << "\nCSR Matrix:" << endl;
 
@@ -47,9 +47,9 @@ int main()
     if (matrix_comprasion(dense_matrix, reconstructed_matrix)) cout << "yes"; else cout << "no"; cout << endl;*/
 
     //cout << endl << "CSR to LAV convert" << endl;
-    LAVMatrix lav_matrix;
+    LAVMatrix<double> lav_matrix;
 
-    CSR_to_LAV(csr_matrix, lav_matrix, rows, cols);
+    CSR_to_LAV<double>(csr_matrix, lav_matrix, rows, cols);
 
     //print_lav_matrix(lav_matrix);
     //print_lav_matrix_w_letters_and_shift(lav_matrix);
@@ -69,7 +69,7 @@ int main()
     cout << "Mult: \n";
 
     cols = rows = 10001;
-    dense_matrix = create_random_matrix(cols, rows,5000000);
+    dense_matrix = create_random_matrix<double>(cols, rows,5000000);
 
 
     vector<double> x(cols);
