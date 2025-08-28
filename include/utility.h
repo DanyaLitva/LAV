@@ -1,0 +1,459 @@
+#pragma once
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <random>
+#include <iomanip>
+#include <bitset>
+#include <chrono>
+#include <immintrin.h>
+#include <omp.h>
+#include <limits>
+#include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+
+const double T = 0.5;
+const int bite_in_register = 512;
+const int SIMD_Lanes = bite_in_register / (sizeof(double) * 8);
+const int SIMD_Lanes_float = bite_in_register / (sizeof(float) * 8);
+const double MinVal = 0.1;
+const double MaxVal = 10.0;
+double error_rate = 1e-10;
+const size_t segment_len = 5000;
+
+using namespace std;
+
+template <typename type>
+struct CSRMatrix {
+    int m = 0;
+    int n = 0;
+    int nz = 0;
+    vector<type> vals;
+    vector<int> col_ind;
+    vector<int> row_ptr;
+};
+
+template <typename type>
+vector<vector<type>> create_random_matrix(int rows, int cols, int non_zero) {
+    vector<vector<type>> matrix(rows, vector<type>(cols, 0.0));
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> dis_row(0, rows - 1);
+    uniform_int_distribution<> dis_col(0, cols - 1);
+    uniform_real_distribution<> dis_val(MinVal, MaxVal);
+
+    int count = 0;
+    while (count < non_zero) {
+        int i = dis_row(gen);
+        int j = dis_col(gen);
+        if (matrix[i][j] == 0.0) {
+            matrix[i][j] = type(dis_val(gen));
+            count++;
+        }
+    }
+    return matrix;
+}
+
+template <typename type>
+void print_matrix(const vector<vector<type>>& matrix) {
+    int rows = matrix.size();
+    int cols = matrix[0].size();
+
+    cout << "    ";
+    for (int j = 0; j < cols; j++) {
+        cout << setw(5) << j << " ";
+    }
+    cout << endl;
+
+    cout << "     ";
+    for (int j = 0; j < cols; j++) {
+        cout << "------";
+    }
+    cout << endl;
+
+    for (int i = 0; i < rows; i++) {
+        cout << setw(3) << i << " |";
+        for (int j = 0; j < cols; j++) {
+            cout << fixed << setw(5) << setprecision(2) << matrix[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
+template <typename type>
+CSRMatrix<type> dense_to_csr(const vector<vector<type>>& dense) {
+    CSRMatrix<type> csr;
+    int rows = dense.size();
+    int cols = dense[0].size();
+    csr.row_ptr.push_back(0);
+    csr.m = rows;
+    csr.n = cols;
+    int count_nz = 0;
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            if (dense[i][j] != 0.0) {
+                csr.vals.push_back(dense[i][j]);
+                csr.col_ind.push_back(j);
+                count_nz++;
+            }
+        }
+        csr.row_ptr.push_back(csr.vals.size());
+    }
+    csr.nz = count_nz;
+    return csr;
+}
+
+template <typename type>
+vector<vector<type>> csr_to_dense(const CSRMatrix<type>& csr, int rows, int cols) {
+    vector<vector<type>> dense(rows, vector<type>(cols, 0.0));
+
+    for (int i = 0; i < rows; i++) {
+        int start = csr.row_ptr[i];
+        int end = csr.row_ptr[i + 1];
+
+        for (int j = start; j < end; j++) {
+            int col_index = csr.col_ind[j];
+            dense[i][col_index] = csr.vals[j];
+        }
+    }
+    return dense;
+}
+
+template <typename type>
+bool matrix_comprasion(vector<vector<type>> left, vector<vector<type>> right) {
+    if (left.size() != right.size()) return false;
+    if (left.front().size() != right.front().size()) return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+        for (size_t j = 0; j < left.front().size(); ++j) {
+            if (abs(left[i][j] - right[i][j]) > error_rate) return false;
+        }
+    }
+
+    return true;
+}
+
+template <typename type>
+void print_csr_matrix(const CSRMatrix<type>& csr) {
+    cout << "CSR vals: ";
+    for (type val : csr.vals) {
+        cout << fixed << setprecision(2) << val << " ";
+    }
+    cout << endl;
+
+    cout << "CSR Col Indices: ";
+    for (int col : csr.col_ind) {
+        cout << col << " ";
+    }
+    cout << endl;
+
+    cout << "CSR Row Pointers: ";
+    for (int ptr : csr.row_ptr) {
+        cout << ptr << " ";
+    }
+    cout << endl;
+}
+
+template <typename type>
+void MV_dense(vector<vector<type>> dense_matrix, vector<type> x, vector<type>& res, int rows, int cols) {
+    for (size_t i = 0; i < rows; ++i) res[i] = 0.0;
+
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
+            res[i] += dense_matrix[i][j] * x[j];
+        }
+    }
+}
+
+template <typename type>
+void SpMV_CSR(const CSRMatrix<type>& mat, const vector<type>& vec, vector<type>& result, int rows, int cols) {
+    result.clear();
+    result.resize(rows);
+    for (int i = 0; i < rows; ++i) {
+        type sum = 0.0;
+        int start = mat.row_ptr[i];
+        int end = mat.row_ptr[i + 1];
+
+        for (int j = start; j < end; ++j) {
+            sum += mat.vals[j] * vec[mat.col_ind[j]];
+        }
+        result[i] = sum;
+    }
+}
+
+template <typename type>
+bool vector_comprasion(vector<type> left, vector<type> right) {
+    if (left.size() != right.size()) return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+            if (abs(left[i] - right[i]) > error_rate) return false;
+    }
+
+    return true;
+}
+
+
+
+
+/*
+template <typename type>
+void CSR_to_LAV_format(CSRMatrix<type>& csr_matrix, LAVMatrix<type>& lav_matrix, int rows, int cols) {
+    lav_matrix = LAVMatrix<type>();
+    lav_matrix.m = csr_matrix.m;
+    lav_matrix.n = csr_matrix.n;
+    lav_matrix.nz = csr_matrix.nz;
+    int count_el = csr_matrix.row_ptr.back() - csr_matrix.row_ptr.front();
+
+    vector<pair<int, int>> lav_col(cols);
+
+    for (size_t it = 0; it < csr_matrix.col_ind.size(); ++it) lav_col[csr_matrix.col_ind[it]].second++;
+    for (size_t it = 0; it < cols; ++it) lav_col[it].first = it;
+
+    std::sort(lav_col.begin(), lav_col.end(), [](const std::pair<int, int>& left, const std::pair<int, int>& right) {
+        return left.second > right.second;
+        });
+
+    int separation = 0;
+    int temp = 0;
+    while ((double(temp) / count_el) < T) {
+        temp += lav_col[separation].second;
+        separation++;
+    }
+
+    //
+    //SPARSE PART OF LAV MATRIX
+    CSRMatrix<type> sparse_part;
+    sparse_part.row_ptr.push_back(0);
+
+    vector<int> old_to_sparse(cols, -1);
+    int sparse_col_count = cols - separation;
+    for (int i = separation; i < cols; i++) {
+        old_to_sparse[lav_col[i].first] = i - separation;
+    }
+
+    for (int i = 0; i < rows; i++) {
+        int start = csr_matrix.row_ptr[i];
+        int end = csr_matrix.row_ptr[i + 1];
+        int count_in_row = 0;
+
+        for (int j = start; j < end; j++) {
+            int old_col = csr_matrix.col_ind[j];
+            if (old_to_sparse[old_col] != -1) {
+                sparse_part.vals.push_back(csr_matrix.vals[j]);
+                sparse_part.col_ind.push_back(old_col);
+                count_in_row++;
+            }
+        }
+        sparse_part.row_ptr.push_back(sparse_part.row_ptr.back() + count_in_row);
+    }
+
+    lav_matrix.sparse_part = sparse_part;
+
+    //
+    //DENSE PART OF LAV MATRIX
+
+    size_t segment_count = separation / segment_len;
+    if ((separation % segment_len) != 0) segment_count++;
+    lav_matrix.segments.resize(segment_count);
+
+    vector<int> old_to_new(cols, -1);
+    for (int i = 0; i < cols; i++) {
+        old_to_new[lav_col[i].first] = i;
+    }
+
+    for (size_t segment_num = 0; segment_num < segment_count; segment_num++) {
+        size_t start_seg = segment_num * segment_len;
+        size_t end_seg = start_seg + segment_len;
+        if (segment_num == (segment_count - 1)) end_seg = separation;
+
+        vector<pair<int, int>> row_nonzeros(rows);
+        for (int i = 0; i < rows; i++) {
+            row_nonzeros[i] = { i, 0 };
+
+            int start = csr_matrix.row_ptr[i];
+            int end = csr_matrix.row_ptr[i + 1];
+            for (int j = start; j < end; j++) {
+                int old_col = csr_matrix.col_ind[j];
+                int new_col = old_to_new[old_col];
+                if ((start_seg <= new_col) && (new_col < end_seg)) {
+                    row_nonzeros[i].second++;
+                }
+            }
+        }
+
+        sort(row_nonzeros.begin(), row_nonzeros.end(),
+            [](const pair<int, int>& a, const pair<int, int>& b) {
+                return a.second > b.second;
+            });
+
+        vector<int> old_row_to_new(rows);
+        for (int i = 0; i < rows; i++) {
+            old_row_to_new[row_nonzeros[i].first] = i;
+        }
+
+        vector<int> max_len_in_chunk;
+        for (size_t i = 0; i < rows; ++i) {
+            if (i % SIMD_Lanes == 0) max_len_in_chunk.push_back(row_nonzeros[i].second);
+            else {
+                if (max_len_in_chunk.back() < row_nonzeros[i].second) max_len_in_chunk.back() = row_nonzeros[i].second;
+
+            }
+        }
+
+        int ind = 0;
+        int num_chunks = max_len_in_chunk.size();
+        for (int i : max_len_in_chunk) {
+            lav_matrix.segments[segment_num].chunk_offsets.push_back(lav_matrix.segments[segment_num].chunk_offsets.back() + i);
+
+            lav_matrix.segments[segment_num].vals.push_back(vector<vector<type>>(i));
+            lav_matrix.segments[segment_num].col_id.push_back(vector<vector<int>>(i));
+
+            for (int col = 0; col < i; ++col) {
+                lav_matrix.segments[segment_num].vals[ind][col].resize(SIMD_Lanes);
+                lav_matrix.segments[segment_num].col_id[ind][col].resize(SIMD_Lanes, -1);
+            }
+            ++ind;
+        }
+
+        if (rows % SIMD_Lanes != 0) {
+            int last_chunk_idx = lav_matrix.segments[segment_num].vals.size() - 1;
+            int last_chunk_cols = max_len_in_chunk.back();
+            int actual_rows = rows % SIMD_Lanes;
+
+            for (int col = 0; col < last_chunk_cols; ++col) {
+                lav_matrix.segments[segment_num].vals[last_chunk_idx][col].resize(actual_rows);
+                lav_matrix.segments[segment_num].col_id[last_chunk_idx][col].resize(actual_rows, -1);
+            }
+        }
+
+        vector<pair<type, int>> actual_lane_vals;
+        vector<pair<int, int>> actual_lane_cols;
+
+        for (int i = 0; i < rows; i++) {
+            int start = csr_matrix.row_ptr[i];
+            int end = csr_matrix.row_ptr[i + 1];
+            int new_row = old_row_to_new[i];
+
+            actual_lane_vals.clear();
+            actual_lane_cols.clear();
+            for (int j = start; j < end; j++) {
+                int old_col = csr_matrix.col_ind[j];
+                int new_col = old_to_new[old_col];
+                if ((start_seg <= new_col) && (new_col < end_seg)) {
+                    int chunk_index = new_row / SIMD_Lanes;
+                    int row_in_chunk = new_row % SIMD_Lanes;
+                    actual_lane_vals.push_back(make_pair(csr_matrix.vals[j], new_col));
+                    actual_lane_cols.push_back(make_pair(old_col, new_col));
+                }
+            }
+
+            int temp = 0;
+            sort(actual_lane_vals.begin(), actual_lane_vals.end(),
+                [](const pair<type, int>& a, const pair<type, int>& b) {
+                    return a.second < b.second;
+                });
+
+            sort(actual_lane_cols.begin(), actual_lane_cols.end(),
+                [](const pair<int, int>& a, const pair<int, int>& b) {
+                    return a.second < b.second;
+                });
+            for (int j = 0; j < actual_lane_vals.size(); ++j) {
+                lav_matrix.segments[segment_num].vals[new_row / SIMD_Lanes][j][new_row % SIMD_Lanes] = actual_lane_vals[j].first;
+                lav_matrix.segments[segment_num].col_id[new_row / SIMD_Lanes][j][new_row % SIMD_Lanes] = actual_lane_cols[j].first;
+            }
+        }
+
+
+        vector<vector<int>> out_order(int(std::ceil(type(rows) / SIMD_Lanes)));
+        for (size_t i = 0; i < rows; ++i) {
+            out_order[i / SIMD_Lanes].push_back(row_nonzeros[i].first);
+        }
+
+        lav_matrix.segments[segment_num].out_order = out_order;
+
+        for (size_t i = 0; i < lav_matrix.segments[segment_num].vals.size(); ++i) {
+            int num_columns = lav_matrix.segments[segment_num].vals[i].size();
+            for (size_t j = 0; j < num_columns; ++j) {
+                bitset<SIMD_Lanes> actual_mask = 0;
+                int num_rows = lav_matrix.segments[segment_num].vals[i][j].size();
+
+                for (size_t k = 0; k < num_rows; ++k) {
+                    if (lav_matrix.segments[segment_num].col_id[i][j][k] != -1) {
+                        actual_mask |= (1 << k);
+                    }
+                }
+                lav_matrix.segments[segment_num].mask.push_back(actual_mask);
+            }
+        }
+
+
+    }
+}
+
+template <typename type>
+void SpMV_LAV_format(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
+    result.clear();
+    result.resize(rows, type(0.0));
+    bitset<SIMD_Lanes> mask;
+    vector<int> row_ids(SIMD_Lanes);
+    vector<type> prev(SIMD_Lanes);
+    vector<int> now_col_ids(SIMD_Lanes);
+    vector<type> now_vals(SIMD_Lanes);
+    vector<type> xval(SIMD_Lanes);
+    vector<type> mul(SIMD_Lanes);
+    vector<type> row_sums(SIMD_Lanes);
+    for (const LAVSegment<type>& seg : lav_matrix.segments) {
+        int num_chunks = seg.vals.size();
+
+        for (int c = 0; c < num_chunks; ++c) {
+            int num_lanes = seg.vals[c].front().size();
+            row_sums = vector<type>(SIMD_Lanes, type(0.0));
+
+            for (size_t num_out_order = 0; num_out_order < num_lanes; num_out_order++) {
+                row_ids[num_out_order] = seg.out_order[c][num_out_order];
+                //prev[num_out_order] = result[seg.out_order[c][num_out_order]];
+            }
+
+            for (int i = seg.chunk_offsets[c]; i < seg.chunk_offsets[c + 1]; ++i) {
+                int num_in_array = i - seg.chunk_offsets[c];
+                mask = seg.mask[i];
+
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        now_col_ids[num] = seg.col_id[c][num_in_array][num];
+                        now_vals[num] = seg.vals[c][num_in_array][num];
+                        xval[num] = vec[now_col_ids[num]];
+                    }
+                }
+
+                //mul
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        mul[num] = now_vals[num] * xval[num];
+                    }
+                }
+
+                for (size_t num = 0; num < num_lanes; ++num) {
+                    if (mask.test(num)) {
+                        row_sums[num] += mul[num];
+                    }
+                }
+
+            }
+
+
+            for (size_t num = 0; num < num_lanes; ++num) {
+                result[row_ids[num]] += row_sums[num];
+            }
+
+
+
+
+        }
+    }
+    vector<type> temp_res(rows, type(0.0));
+    SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
+    for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
+}
+*/
