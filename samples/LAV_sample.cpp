@@ -7,7 +7,7 @@ using namespace std;
 int main()
 {
     //bitset lock
-    if (SIMD_Lanes > 64) return 1;
+    if (SIMD_Lanes > 64) return -1;
 
 
     int rows_count = 8;

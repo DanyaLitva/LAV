@@ -5,9 +5,11 @@ using namespace std;
 
 template <typename type>
 struct LAVSegment {
+    //chunk|num in vector y
     vector<vector<int>> out_order;
     vector<int> chunk_offsets = vector<int>(1, 0);
     vector<bitset<SIMD_Lanes >> mask;
+    //chunk|row|col
     vector<vector<vector<type>>> vals;
     vector<vector<vector<int>>> col_id;
 };
@@ -272,9 +274,22 @@ void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector
 }
 
 template <typename type>
+void SpMV_CSR_without_clear_result(const CSRMatrix<type>& mat, const vector<type>& vec, vector<type>& result, int rows, int cols) {
+    for (int i = 0; i < rows; ++i) {
+        type sum = 0.0;
+        int start = mat.row_ptr[i];
+        int end = mat.row_ptr[i + 1];
+
+        for (int j = start; j < end; ++j) {
+            sum += mat.vals[j] * vec[mat.col_ind[j]];
+        }
+        result[i] += sum;
+    }
+}
+
+template <typename type>
 void simple_SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
-    result.clear();
-    result.resize(rows, type(0.0));
+    result = vector<type>(rows, type(0.0));
     bitset<SIMD_Lanes> mask;
 
     for (const LAVSegment<type>& seg : lav_matrix.segments) {
@@ -282,9 +297,10 @@ void simple_SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec,
 
         for (int c = 0; c < num_chunks; ++c) {
             int num_lanes = seg.vals[c].size();
+            int next_chunk = seg.chunk_offsets[c + 1];
+            int num_in_array = 0;
 
-            for (int i = seg.chunk_offsets[c]; i < seg.chunk_offsets[c + 1]; ++i) {
-                int num_in_array = i - seg.chunk_offsets[c];
+            for (int i = seg.chunk_offsets[c]; i < next_chunk; ++i) {
                 mask = seg.mask[i];
 
                 //mul
@@ -294,14 +310,13 @@ void simple_SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec,
                     }
                 }
 
+                num_in_array++;
             }
 
         }
     }
 
-    vector<type> temp_res(rows, type(0.0));
-    SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
-    for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
+    SpMV_CSR_without_clear_result(lav_matrix.sparse_part, vec, result, rows, cols);
 }
 
 template <typename type>
