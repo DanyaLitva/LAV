@@ -9,7 +9,6 @@ int main()
     //bitset lock
     if (SIMD_Lanes > 64) return -1;
 
-
     int rows_count = 8;
     int cols_count = 8;
     int count_el_in_matrix = 19;
@@ -151,16 +150,25 @@ int main()
     cout << endl << endl;
 
 
+
+
+
+    cout << "parallel CSR: \n\t";
     start = std::chrono::steady_clock::now();
-    SpMV_LAV_format (lav_matrix, x, y, rows, cols);
+    //parallel_SpMV_CSR(csr_matrix, x, y, rows, cols);
     end = std::chrono::steady_clock::now();
     elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     cout << "it time: " << elapsed << " miliseconds" << endl;
+    /*for (double i : y) cout << i << " ";
+    cout << endl;*/
 
     cout << "\tIs correct?: ";
     if (vector_comprasion(y, temp_y)) cout << "yes";
     else cout << "no";
+    cout << endl;
 
+
+    y = vector<double>();
 
 
 
