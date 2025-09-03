@@ -136,8 +136,6 @@ int main()
     else cout << "no";
     cout << endl << endl;
 
-
-
     y = vector<double>();
 
     cout << "simple LAV: \n\t";
@@ -152,48 +150,20 @@ int main()
     else cout << "no";
     cout << endl << endl;
 
-    /*
-    start = std::chrono::steady_clock::now();
-    CSR_to_LAV_format(csr_matrix, lav_matrix, rows, cols);
-    end = std::chrono::steady_clock::now();
-    elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    cout << "\nanother format: csr to lav time: " << elapsed << " miliseconds" << endl<<endl;
 
-    cout << "another format LAV: \n\t";
     start = std::chrono::steady_clock::now();
     SpMV_LAV_format (lav_matrix, x, y, rows, cols);
     end = std::chrono::steady_clock::now();
     elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     cout << "it time: " << elapsed << " miliseconds" << endl;
 
-
     cout << "\tIs correct?: ";
     if (vector_comprasion(y, temp_y)) cout << "yes";
     else cout << "no";
-    cout << endl << endl;
-    */
-
-    //try {
-    //    csr_matrix = load_coo_to_csr<double>("web-Google.mtx");
-    //}
-    //catch (const std::exception& ex) {
-    //    std::cerr << "Error: " << ex.what() << std::endl;
-    //}
-    //cout << csr_matrix.m<<" "<< csr_matrix.n<<" "<< csr_matrix.nz<<endl;
-
-    //start = std::chrono::steady_clock::now();
-    //CSR_to_LAV(csr_matrix, lav_matrix, rows, cols);
-    //end = std::chrono::steady_clock::now();
-    //elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    //cout << "\ncsr to lav time: " << elapsed << " miliseconds" << endl << endl;
 
 
-    //cout << "LAV: \n\t";
-    //start = std::chrono::steady_clock::now();
-    //spmv_lav_avx512_double(1.0, lav_matrix, x, 1.0, y);
-    //end = std::chrono::steady_clock::now();
-    //elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    //cout << "it time: " << elapsed << " miliseconds" << endl;
+
+
 }
 
 

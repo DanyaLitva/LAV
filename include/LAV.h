@@ -273,6 +273,7 @@ void SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector
     for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
 }
 
+/*
 template <typename type>
 void SpMV_CSR_without_clear_result(const CSRMatrix<type>& mat, const vector<type>& vec, vector<type>& result, int rows, int cols) {
     for (int i = 0; i < rows; ++i) {
@@ -286,6 +287,7 @@ void SpMV_CSR_without_clear_result(const CSRMatrix<type>& mat, const vector<type
         result[i] += sum;
     }
 }
+*/
 
 template <typename type>
 void simple_SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec, vector<type>& result, int rows, int cols) {
@@ -316,7 +318,9 @@ void simple_SpMV_LAV(const LAVMatrix<type>& lav_matrix, const vector<type>& vec,
         }
     }
 
-    SpMV_CSR_without_clear_result(lav_matrix.sparse_part, vec, result, rows, cols);
+    vector<type> temp_res(rows, type(0.0));
+    SpMV_CSR(lav_matrix.sparse_part, vec, temp_res, rows, cols);
+    for (int i = 0; i < rows; ++i) result[i] += temp_res[i];
 }
 
 template <typename type>

@@ -13,7 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-
+#include <omp.h>
 
 const double T = 0.5;
 const int bite_in_register = 512;
